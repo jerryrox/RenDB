@@ -151,10 +151,12 @@ namespace RenDBCore.Internal
 			}
 			else {
 				while(true) {
+					// Starting index should be assigned before leaf check!
+					startIndex = startNode.EntryCount;
+
 					if(startNode.IsLeaf)
 						break;
 
-					startIndex = startNode.EntryCount;
 					startNode = startNode.GetChildNode(startNode.ChildNodesCount - 1);
 				}
 			}
