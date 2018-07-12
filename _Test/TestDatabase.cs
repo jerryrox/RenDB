@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using RenDBCore;
 using RenDBCore.Internal;
+using Renko.Matching;
 
 public class TestDatabase : IDisposable {
 	
