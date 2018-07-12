@@ -60,7 +60,7 @@ namespace RenDBCore.Internal
 			var shouldContinue = true;
 			try {
 				while(shouldContinue) {
-					using(var enumerator = (TreeEnumerator<K, V>)GetLargerOrEqual(key).GetEnumerator()) {
+					using(var enumerator = (TreeEnumerator<K, V>)GetExactMatch(key, true).GetEnumerator()) {
 						while(true) {
 							// No more iteration, finish.
 							if(!enumerator.MoveNext()) {
@@ -107,7 +107,7 @@ namespace RenDBCore.Internal
 			}
 
 			// Find node to delete
-			using(var enumerator = (TreeEnumerator<K, V>)GetLargerOrEqual(key).GetEnumerator()) {
+			using(var enumerator = (TreeEnumerator<K, V>)GetExactMatch(key, true).GetEnumerator()) {
 				// If there is a matching entry
 				if(enumerator.MoveNext() && nodeManager.KeyComparer.Compare(key, enumerator.Current.Item1) == 0) {
 					enumerator.CurrentNode.Remove(enumerator.CurrentIndex);
@@ -137,29 +137,12 @@ namespace RenDBCore.Internal
 		/// </summary>
 		public IEnumerable<Tuple<K, V>> GetAll(bool ascending)
 		{
-			// Find starting node
-			TreeNode<K, V> startNode = nodeManager.RootNode;
+			TreeNode<K, V> startNode = null;
 			int startIndex = 0;
-			if(ascending) {
-				while(true) {
-					if(startNode.IsLeaf)
-						break;
-
-					startNode = startNode.GetChildNode(0);
-				}
-				startIndex = -1;
-			}
-			else {
-				while(true) {
-					// Starting index should be assigned before leaf check!
-					startIndex = startNode.EntryCount;
-
-					if(startNode.IsLeaf)
-						break;
-
-					startNode = startNode.GetChildNode(startNode.ChildNodesCount - 1);
-				}
-			}
+			if(ascending)
+				startNode = FindFirstNode(ref startIndex);
+			else
+				startNode = FindLastNode(ref startIndex);
 
 			return new TreeScanner<K, V>(
 				nodeManager,
@@ -170,66 +153,51 @@ namespace RenDBCore.Internal
 		}
 
 		/// <summary>
+		/// Finds all entries with keys matching the specified matcher.
+		/// </summary>
+		public IEnumerable<Tuple<K, V>> GetOptionMatch(bool ascending, IMatcher<K> matcher)
+		{
+			if(matcher == null)
+				return GetAll(ascending);
+			
+			TreeNode<K, V> startNode = null;
+			int startIndex = 0;
+			if(ascending)
+				startNode = FindFirstNode(ref startIndex);
+			else
+				startNode = FindLastNode(ref startIndex);
+
+			return new TreeMatchScanner<K, V>(
+				nodeManager,
+				startNode,
+				startIndex,
+				matcher,
+				ascending ? TreeScanDirections.Ascending : TreeScanDirections.Descending
+			);
+		}
+
+		/// <summary>
 		/// Finds all entries with the key larger than or equal to specified.
 		/// </summary>
-		public IEnumerable<Tuple<K, V>> GetLargerOrEqual (K key)
+		public IEnumerable<Tuple<K, V>> GetExactMatch (K key, bool ascending)
 		{
 			int index = 0;
-			var node = FindNodeIterative(key, nodeManager.RootNode, true, ref index);
+			var node = FindNodeIterative(key, nodeManager.RootNode, ascending, ref index);
+
+			TreeScanDirections scanDirection = TreeScanDirections.Ascending;
+			if(ascending) {
+				index = (index >= 0 ? index : ~index) - 1;
+			}
+			else {
+				index = index >= 0 ? index + 1 : ~index;
+				scanDirection = TreeScanDirections.Descending;
+			}
 
 			return new TreeScanner<K, V>(
 				nodeManager,
 				node,
-				(index >= 0 ? index : ~index) - 1,
-				TreeScanDirections.Ascending
-			);
-		}
-
-		/// <summary>
-		/// Finds all entries with the key larger than specified.
-		/// </summary>
-		public IEnumerable<Tuple<K, V>> GetLarger (K key)
-		{
-			int index = 0;
-			var node = FindNodeIterative(key, nodeManager.RootNode, false, ref index);
-
-			return new TreeScanner<K, V>(
-				nodeManager,
-				node,
-				index >= 0 ? index : ~index - 1,
-				TreeScanDirections.Ascending
-			);
-		}
-
-		/// <summary>
-		/// Finds all entries with the key lesser than or equal to specified.
-		/// </summary>
-		public IEnumerable<Tuple<K, V>> GetLesserOrEqual (K key)
-		{
-			int index = 0;
-			var node = FindNodeIterative(key, nodeManager.RootNode, false, ref index);
-
-			return new TreeScanner<K, V>(
-				nodeManager,
-				node,
-				index >= 0 ? index + 1 : ~index,
-				TreeScanDirections.Descending
-			);
-		}
-
-		/// <summary>
-		/// Finds all entries with the key lesser than specified.
-		/// </summary>
-		public IEnumerable<Tuple<K, V>> GetLesser (K key)
-		{
-			int index = 0;
-			var node = FindNodeIterative(key, nodeManager.RootNode, true, ref index);
-
-			return new TreeScanner<K, V>(
-				nodeManager,
-				node,
-				(index >= 0 ? index : ~index) - 1,
-				TreeScanDirections.Descending
+				index,
+				scanDirection
 			);
 		}
 
@@ -238,7 +206,6 @@ namespace RenDBCore.Internal
 		/// Outputs an iteration start index indicating the starting position of duplicate keys.
 		/// Handles the case for duplicate keys.
 		/// </summary>
-		/// <param name="includeEqual">Whether index should return from beginning of equal key encounter or last.</param>
 		TreeNode<K, V> FindNodeIterative(K key, TreeNode<K, V> node, bool includeEqual, ref int startIndex)
 		{
 			// If empty node, just return that
@@ -315,6 +282,41 @@ namespace RenDBCore.Internal
 		TreeNode<K, V> FindNode(K key, ref int insertIndex)
 		{
 			return FindNode(key, nodeManager.RootNode, ref insertIndex);
+		}
+
+		/// <summary>
+		/// Finds and returns the node with the lowest value.
+		/// </summary>
+		TreeNode<K, V> FindFirstNode(ref int index)
+		{
+			// Find starting node
+			TreeNode<K, V> startNode = nodeManager.RootNode;
+			while(true) {
+				if(startNode.IsLeaf)
+					break;
+				startNode = startNode.GetChildNode(0);
+			}
+
+			index = -1;
+			return startNode;
+		}
+
+		/// <summary>
+		/// Finds and returns the node with the highest value.
+		/// </summary>
+		TreeNode<K, V> FindLastNode(ref int index)
+		{
+			// Find starting node
+			TreeNode<K, V> startNode = nodeManager.RootNode;
+			while(true) {
+				// Starting index should be assigned before leaf check!
+				index = startNode.EntryCount;
+				if(startNode.IsLeaf)
+					break;
+				startNode = startNode.GetChildNode(startNode.ChildNodesCount - 1);
+			}
+
+			return startNode;
 		}
 	}
 }

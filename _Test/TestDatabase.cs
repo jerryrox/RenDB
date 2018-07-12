@@ -91,15 +91,12 @@ public class TestDatabase : IDisposable {
 		if(origData == null)
 			return;
 		var origModel = testSerializer.Deserialize(origData, 0, origData.Length);
-		Debug.Log("Orig model: " + new Renko.Data.JsonData(origModel).ToString());
 
 		// Update the main database
 		recordStorage.Update(index, testSerializer.Serialize(model));
 
 		// Delete secondary index
-		Debug.Log("Deleting secondary: " + new Renko.Data.JsonData(origModel.SecondaryIndex).ToString());
 		if(secondaryIndexes.Delete(origModel.SecondaryIndex, index)) {
-			Debug.Log("Inserted new secondary: " + new Renko.Data.JsonData(model.SecondaryIndex).ToString());
 			secondaryIndexes.Insert(model.SecondaryIndex, index);
 		}
 	}
@@ -156,7 +153,8 @@ public class TestDatabase : IDisposable {
 		var comparer = Comparer<Tuple<int, string>>.Default;
 		var key = new Tuple<int, string>(age, name);
 
-		foreach(var entry in secondaryIndexes.GetLargerOrEqual(key)) {
+		bool isAscending = true;
+		foreach(var entry in secondaryIndexes.GetExactMatch(key, isAscending)) {
 			// If invalid key, break out
 			int compare = comparer.Compare(entry.Item1, key);
 			if(compare > 0) {
@@ -183,6 +181,29 @@ public class TestDatabase : IDisposable {
 			if(entry == null)
 				continue;
 			
+			var data = recordStorage.Find(entry.Item2);
+			if(data == null)
+				continue;
+
+			yield return testSerializer.Deserialize(data, 0, data.Length);
+		}
+	}
+
+	public IEnumerable<TestModel> Find(IMatcher<int> ageMatcher, IMatcher<string> nameMatcher)
+	{
+		if(isDisposed)
+			throw new ObjectDisposedException("TestDatabase");
+
+		IMatcher<Tuple<int, string>> indexMatcher = new DelegatedMatcher<Tuple<int, string>>(
+			delegate(Tuple<int, string> key) {
+				return ageMatcher.IsMatch(key.Item1) && nameMatcher.IsMatch(key.Item2);
+			}
+		);
+
+		foreach(var entry in secondaryIndexes.GetOptionMatch(true, indexMatcher)) {
+			if(entry == null)
+				continue;
+
 			var data = recordStorage.Find(entry.Item2);
 			if(data == null)
 				continue;

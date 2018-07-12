@@ -36,24 +36,14 @@ namespace RenDBCore.Internal
 		IEnumerable<Tuple<K, V>> GetAll(bool ascending);
 
 		/// <summary>
-		/// Finds all entries with the key larger than or equal to specified.
+		/// Finds all entries with keys matching specified matchers.
 		/// </summary>
-		IEnumerable<Tuple<K, V>> GetLargerOrEqual(K key);
+		IEnumerable<Tuple<K, V>> GetOptionMatch(bool ascending, IMatcher<K> matcher);
 
 		/// <summary>
-		/// Finds all entries with the key larger than specified.
+		/// Finds all entries with the keys matching or (larger if ascending, lesser if descending) to specified key.
 		/// </summary>
-		IEnumerable<Tuple<K, V>> GetLarger(K key);
-
-		/// <summary>
-		/// Finds all entries with the key lesser than or equal to specified.
-		/// </summary>
-		IEnumerable<Tuple<K, V>> GetLesserOrEqual(K key);
-
-		/// <summary>
-		/// Finds all entries with the key lesser than specified.
-		/// </summary>
-		IEnumerable<Tuple<K, V>> GetLesser(K key);
+		IEnumerable<Tuple<K, V>> GetExactMatch(K key, bool ascending);
 	}
 }
 

@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using Renko.Data;
 using System;
+using RenDBCore;
 
 using Guid = System.Guid;
 
@@ -79,6 +80,19 @@ public class RenDBTester : MonoBehaviour {
 
 		if(Input.GetKeyDown(KeyCode.Alpha7)) {
 			var results = testDb.FindAll(Input.GetKey(KeyCode.LeftShift));
+			Debug.LogWarning("Getting results");
+			foreach(var model in results)
+				Debug.Log("Found: " + new JsonData(model).ToString());
+		}
+
+		if(Input.GetKeyDown(KeyCode.Alpha8)) {
+			MatchGroup<int> ageMatcher = new MatchGroup<int>(); {
+				ageMatcher.AddMatcher(new IntMatcher(0, IntMatcher.Types.GreaterOrEqual));
+				ageMatcher.AddMatcher(new IntMatcher(5, IntMatcher.Types.LessOrEqual));
+			}
+			StringMatcher nameMatcher = new StringMatcher("updated", StringMatcher.Types.StartWith, true);
+
+			var results = testDb.Find(ageMatcher, nameMatcher);
 			Debug.LogWarning("Getting results");
 			foreach(var model in results)
 				Debug.Log("Found: " + new JsonData(model).ToString());

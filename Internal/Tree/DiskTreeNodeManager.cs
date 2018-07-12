@@ -19,9 +19,9 @@ namespace RenDBCore.Internal
 		readonly IComparer<K> keyComparer;
 		readonly IComparer<Tuple<K, V>> entryComparer;
 
-		readonly int weakNodeCleanThreshold = 1000;
-		readonly int maxStrongNodes = 200;
-		readonly ushort minEntriesPerNode = 36;
+		readonly int weakNodeCleanThreshold;
+		readonly int maxStrongNodes;
+		readonly ushort minEntriesPerNode;
 
 		private List<uint> deleteIds;
 		private TreeNode<K, V> rootNode;
@@ -65,13 +65,16 @@ namespace RenDBCore.Internal
 
 
 		public DiskTreeNodeManager(ISerializer<K> keySerializer, ISerializer<V> valueSerializer,
-			IRecordStorage recordStorage) : this(keySerializer, valueSerializer, recordStorage, Comparer<K>.Default) {}
+			IRecordStorage recordStorage, DiskNodeOptions options = null) :
+		this(keySerializer, valueSerializer, recordStorage, Comparer<K>.Default, options) {}
 
 		public DiskTreeNodeManager(ISerializer<K> keySerializer, ISerializer<V> valueSerializer,
-			IRecordStorage recordStorage, IComparer<K> keyComparer)
+			IRecordStorage recordStorage, IComparer<K> keyComparer, DiskNodeOptions options = null)
 		{
 			if(recordStorage == null)
 				throw new ArgumentNullException("recordStorage");
+			if(options == null)
+				options = new DiskNodeOptions();
 
 			this.recordStorage = recordStorage;
 			this.dirtyNodes = new Dictionary<uint, TreeNode<K, V>>();
@@ -80,6 +83,10 @@ namespace RenDBCore.Internal
 			this.serializer = new DiskTreeNodeSerializer<K, V>(this, keySerializer, valueSerializer);
 			this.keyComparer = keyComparer;
 			this.entryComparer = new TreeEntryComparer<K, V>(keyComparer);
+
+			this.weakNodeCleanThreshold = options.WeakNodeCleanInterval;
+			this.maxStrongNodes = options.MaxStrongNode;
+			this.minEntriesPerNode = options.MinEntriesPerNode;
 
 			this.deleteIds = new List<uint>(weakNodeCleanThreshold / 2);
 			this.cleanupCounter = 0;
