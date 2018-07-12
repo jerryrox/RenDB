@@ -14,11 +14,7 @@ namespace RenDBCore
 		/// </summary>
 		public int Number {
 			get { return number; }
-			set {
-				if(value == null)
-					throw new ArgumentNullException("value");
-				number = value;
-			}
+			set { number = value; }
 		}
 
 
