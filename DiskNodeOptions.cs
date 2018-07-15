@@ -12,10 +12,10 @@ namespace RenDBCore
 		public ushort MinEntriesPerNode = 36;
 
 
-		public DiskNodeOptions (int weakNodeCleanInternal = 1000, int maxStrongNode = 200,
+		public DiskNodeOptions (int weakNodeCleanInterval = 1000, int maxStrongNode = 200,
 			ushort minEntriesPerNode = 32)
 		{
-			WeakNodeCleanInterval = weakNodeCleanInternal;
+			WeakNodeCleanInterval = weakNodeCleanInterval;
 			MaxStrongNode = maxStrongNode;
 			MinEntriesPerNode = minEntriesPerNode;
 		}

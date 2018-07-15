@@ -5,7 +5,7 @@ using Renko.Matching;
 
 namespace RenDBCore.Internal
 {
-	public class IndexTree<K, V> : IIndex<K, V> {
+	public class IndexTree<K, V> : IIndex, IIndex<K, V> {
 
 		readonly ITreeNodeManager<K, V> nodeManager;
 		readonly bool allowDuplicateKeys;
@@ -18,6 +18,14 @@ namespace RenDBCore.Internal
 			
 			this.nodeManager = nodeManager;
 			this.allowDuplicateKeys = allowDuplicateKeys;
+		}
+
+		/// <summary>
+		/// Creates a new entry with specified key and value.
+		/// </summary>
+		public void Insert(object key, object value)
+		{
+			Insert((K)key, (V)value);
 		}
 
 		/// <summary>
@@ -42,6 +50,15 @@ namespace RenDBCore.Internal
 
 			// Save
 			nodeManager.Save();
+		}
+
+		/// <summary>
+		/// Deletes an entry with matching KeyValue and optionally a comparer.
+		/// Used with non-unique keys.
+		/// </summary>
+		public bool Delete(object key, object value, IComparer valueComparer = null)
+		{
+			return Delete((K)key, (V)value, valueComparer as IComparer<V>);
 		}
 
 		/// <summary>
@@ -100,6 +117,15 @@ namespace RenDBCore.Internal
 		/// Deletes all entries with matching key.
 		/// Used with unique keys.
 		/// </summary>
+		public bool Delete(object key)
+		{
+			return Delete((K)key);
+		}
+
+		/// <summary>
+		/// Deletes all entries with matching key.
+		/// Used with unique keys.
+		/// </summary>
 		public bool Delete (K key)
 		{
 			if(allowDuplicateKeys) {
@@ -121,6 +147,14 @@ namespace RenDBCore.Internal
 		/// <summary>
 		/// Finds and returns an entry with matching key.
 		/// </summary>
+		public object Get(object key)
+		{
+			return Get((K)key);
+		}
+
+		/// <summary>
+		/// Finds and returns an entry with matching key.
+		/// </summary>
 		public Tuple<K, V> Get (K key)
 		{
 			// Find node containing the key.
@@ -131,6 +165,14 @@ namespace RenDBCore.Internal
 			if(index >= 0 && node != null)
 				return node.GetEntry(index);
 			return null;
+		}
+
+		/// <summary>
+		/// Finds all entries.
+		/// </summary>
+		public IEnumerable GetAllNonGeneric(bool ascending)
+		{
+			return GetAll(ascending);
 		}
 
 		/// <summary>
@@ -154,9 +196,17 @@ namespace RenDBCore.Internal
 		}
 
 		/// <summary>
+		/// Finds all entries with keys matching specified matchers.
+		/// </summary>
+		public IEnumerable GetOptionMatch(IMatcher matcher, bool ascending)
+		{
+			return GetOptionMatch(matcher as IMatcher<K>, ascending);
+		}
+
+		/// <summary>
 		/// Finds all entries with keys matching the specified matcher.
 		/// </summary>
-		public IEnumerable<Tuple<K, V>> GetOptionMatch(bool ascending, IMatcher<K> matcher)
+		public IEnumerable<Tuple<K, V>> GetOptionMatch(IMatcher<K> matcher, bool ascending)
 		{
 			if(matcher == null)
 				return GetAll(ascending);
@@ -178,7 +228,15 @@ namespace RenDBCore.Internal
 		}
 
 		/// <summary>
-		/// Finds all entries with the key larger than or equal to specified.
+		/// Finds all entries with the keys matching or (larger if ascending, lesser if descending) to specified key.
+		/// </summary>
+		public IEnumerable GetExactMatch(object key, bool ascending)
+		{
+			return GetExactMatch((K)key, ascending);
+		}
+
+		/// <summary>
+		/// Finds all entries with the keys matching or (larger if ascending, lesser if descending) to specified key.
 		/// </summary>
 		public IEnumerable<Tuple<K, V>> GetExactMatch (K key, bool ascending)
 		{

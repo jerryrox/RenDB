@@ -7,6 +7,7 @@ public class TestModel : IJsonable {
 	public readonly Guid Id;
 
 	public int Age;
+
 	public string Name;
 
 

@@ -201,7 +201,7 @@ public class TestDatabase : IDisposable {
 			}
 		);
 
-		foreach(var entry in secondaryIndexes.GetOptionMatch(true, indexMatcher)) {
+		foreach(var entry in secondaryIndexes.GetOptionMatch(indexMatcher, true)) {
 			if(entry == null)
 				continue;
 
