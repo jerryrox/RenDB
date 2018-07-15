@@ -41,8 +41,10 @@ namespace RenDBCore.Internal
 					return FixedBothSerialize(node);
 				return FixedValueSerialize(node);
 			}
-			
-			throw new NotSupportedException("valueSerializer must have a fixed size.");
+			else if(keySerializer.IsFixedSize) {
+				return FixedKeySerialize(node);
+			}
+			return FixedNoneSerialize(node);
 		}
 
 		/// <summary>
@@ -55,8 +57,10 @@ namespace RenDBCore.Internal
 					return FixedBothDeserialize(id, data);
 				return FixedValueDeserialize(id, data);
 			}
-
-			throw new NotSupportedException("valueSerializer must have a fixed size.");
+			else if(keySerializer.IsFixedSize) {
+				return FixedKeyDeserialize(id, data);
+			}
+			return FixedNoneDeserialize(id, data);
 		}
 
 		/// <summary>
@@ -149,6 +153,79 @@ namespace RenDBCore.Internal
 		}
 
 		/// <summary>
+		/// Serializes the specified node, assuming only the key is fixed length.
+		/// </summary>
+		byte[] FixedKeySerialize(TreeNode<K, V> node)
+		{
+			using(MemoryStream ms = new MemoryStream()) {
+				// Write parent id
+				ms.Write(LittleEndian.GetBytes((uint)node.ParentId), 0, 4);
+
+				// Write entry count
+				ms.Write(LittleEndian.GetBytes((uint)node.EntryCount), 0, 4);
+
+				// Write children id count
+				ms.Write(LittleEndian.GetBytes((uint)node.ChildNodesCount), 0, 4);
+
+				// Write entries
+				for(int i=0; i<node.EntryCount; i++) {
+					var entry = node.GetEntry(i);
+					byte[] key = keySerializer.Serialize(entry.Item1);
+					byte[] value = valueSerializer.Serialize(entry.Item2);
+
+					ms.Write(key, 0, key.Length);
+					ms.Write(LittleEndian.GetBytes(value.Length), 0, 4);
+					ms.Write(value, 0, value.Length);
+				}
+
+				// Write children ids
+				var childrenIds = node.ChildrenIdArray;
+				for(int i=0; i<childrenIds.Length; i++) {
+					ms.Write(LittleEndian.GetBytes(childrenIds[i]), 0, 4);
+				}
+
+				return ms.ToArray();
+			}
+		}
+
+		/// <summary>
+		/// Serializes the specified node, assuming key and value are not fixed length.
+		/// </summary>
+		byte[] FixedNoneSerialize(TreeNode<K, V> node)
+		{
+			using(MemoryStream ms = new MemoryStream()) {
+				// Write parent id
+				ms.Write(LittleEndian.GetBytes((uint)node.ParentId), 0, 4);
+
+				// Write entry count
+				ms.Write(LittleEndian.GetBytes((uint)node.EntryCount), 0, 4);
+
+				// Write children id count
+				ms.Write(LittleEndian.GetBytes((uint)node.ChildNodesCount), 0, 4);
+
+				// Write entries
+				for(int i=0; i<node.EntryCount; i++) {
+					var entry = node.GetEntry(i);
+					byte[] key = keySerializer.Serialize(entry.Item1);
+					byte[] value = valueSerializer.Serialize(entry.Item2);
+
+					ms.Write(LittleEndian.GetBytes(key.Length), 0, 4);
+					ms.Write(LittleEndian.GetBytes(value.Length), 0, 4);
+					ms.Write(key, 0, key.Length);
+					ms.Write(value, 0, value.Length);
+				}
+
+				// Write children ids
+				var childrenIds = node.ChildrenIdArray;
+				for(int i=0; i<childrenIds.Length; i++) {
+					ms.Write(LittleEndian.GetBytes(childrenIds[i]), 0, 4);
+				}
+
+				return ms.ToArray();
+			}
+		}
+
+		/// <summary>
 		/// Deserializes the specified data, assuming the key and value are fixed length.
 		/// </summary>
 		TreeNode<K, V> FixedBothDeserialize(uint id, byte[] data)
@@ -220,6 +297,99 @@ namespace RenDBCore.Internal
 			for(int i=0; i<entryCount; i++) {
 				int keyLength = BufferHelper.ReadInt32(data, dataOffset);
 				dataOffset += 4;
+				K key = keySerializer.Deserialize(data, dataOffset, keyLength);
+				dataOffset += keyLength;
+				V value = valueSerializer.Deserialize(data, dataOffset, valueLength);
+				dataOffset += valueLength;
+
+				entries[i] = new Tuple<K, V>(key, value);
+			}
+
+			// Read children ids
+			var childrenIds = new uint[childrenIdCount];
+			for(int i=0; i<childrenIdCount; i++) {
+				childrenIds[i] = BufferHelper.ReadUInt32(data, dataOffset);
+				dataOffset += 4;
+			}
+
+			// Create new node.
+			return new TreeNode<K, V>(nodeManager, id, parentId, entries, childrenIds);
+		}
+
+		/// <summary>
+		/// Deserializes the specified data, assuming only the key is fixed length.
+		/// </summary>
+		TreeNode<K, V> FixedKeyDeserialize(uint id, byte[] data)
+		{
+			// Prepare some variables
+			int keyLength = keySerializer.Length;
+			int dataOffset = 0;
+
+			// Read parent id
+			uint parentId = BufferHelper.ReadUInt32(data, dataOffset);
+			dataOffset += 4;
+
+			// Read entry count
+			uint entryCount = BufferHelper.ReadUInt32(data, dataOffset);
+			dataOffset += 4;
+
+			// Read children id count
+			uint childrenIdCount = BufferHelper.ReadUInt32(data, dataOffset);
+			dataOffset += 4;
+
+			// Read entries
+			var entries = new Tuple<K, V>[entryCount];
+			for(int i=0; i<entryCount; i++) {
+				K key = keySerializer.Deserialize(data, dataOffset, keyLength);
+				dataOffset += keyLength;
+
+				int valueLength = BufferHelper.ReadInt32(data, dataOffset);
+				dataOffset += 4;
+				V value = valueSerializer.Deserialize(data, dataOffset, valueLength);
+				dataOffset += valueLength;
+
+				entries[i] = new Tuple<K, V>(key, value);
+			}
+
+			// Read children ids
+			var childrenIds = new uint[childrenIdCount];
+			for(int i=0; i<childrenIdCount; i++) {
+				childrenIds[i] = BufferHelper.ReadUInt32(data, dataOffset);
+				dataOffset += 4;
+			}
+
+			// Create new node.
+			return new TreeNode<K, V>(nodeManager, id, parentId, entries, childrenIds);
+		}
+
+		/// <summary>
+		/// Deserializes the specified data, assuming key and value are not fixed length.
+		/// </summary>
+		TreeNode<K, V> FixedNoneDeserialize(uint id, byte[] data)
+		{
+			// Prepare some variables
+			int dataOffset = 0;
+
+			// Read parent id
+			uint parentId = BufferHelper.ReadUInt32(data, dataOffset);
+			dataOffset += 4;
+
+			// Read entry count
+			uint entryCount = BufferHelper.ReadUInt32(data, dataOffset);
+			dataOffset += 4;
+
+			// Read children id count
+			uint childrenIdCount = BufferHelper.ReadUInt32(data, dataOffset);
+			dataOffset += 4;
+
+			// Read entries
+			var entries = new Tuple<K, V>[entryCount];
+			for(int i=0; i<entryCount; i++) {
+				int keyLength = BufferHelper.ReadInt32(data, dataOffset);
+				dataOffset += 4;
+				int valueLength = BufferHelper.ReadInt32(data, dataOffset);
+				dataOffset += 4;
+
 				K key = keySerializer.Deserialize(data, dataOffset, keyLength);
 				dataOffset += keyLength;
 				V value = valueSerializer.Deserialize(data, dataOffset, valueLength);
