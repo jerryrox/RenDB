@@ -29,6 +29,18 @@ namespace RenDBCore
 		}
 
 		/// <summary>
+		/// Creates and stores a new Guid from specified string or just make one.
+		/// </summary>
+		public virtual Guid CreateId(string id = null)
+		{
+			if(string.IsNullOrEmpty(id))
+				Id = Guid.NewGuid();
+			else
+				Id = new Guid(id);
+			return Id;
+		}
+
+		/// <summary>
 		/// Returns all fields in this model.
 		/// </summary>
 		public IEnumerator<string> GetAllFields ()
