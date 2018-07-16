@@ -43,6 +43,11 @@ namespace RenDBCore.Internal
 		protected Stream dbStream;
 
 		/// <summary>
+		/// The unique index tree IO stream.
+		/// </summary>
+		protected Stream uniqueIndexStream;
+
+		/// <summary>
 		/// Dictionary of IO streams associated with index (field) names.
 		/// </summary>
 		protected Dictionary<string, Stream> indexStreams;
@@ -76,16 +81,6 @@ namespace RenDBCore.Internal
 			this.indexStreams = new Dictionary<string, Stream>();
 			this.NormalIndexes = new Dictionary<string, IIndex>();
 			this.isDisposed = false;
-
-			// Initialize unique index tree
-			this.UniqueIndex = new IndexTree<Guid, uint>(
-				GetNewNodeManager(
-					new GuidSerializer(),
-					new UintSerializer(),
-					new RecordStorage(new BlockStorage(GetNewIndexStream("_id"))),
-					256
-				)
-			);
 		}
 
 		~BaseDatabase()
@@ -98,6 +93,9 @@ namespace RenDBCore.Internal
 		/// </summary>
 		public virtual void RegisterIndex<K>(string label, string field, ISerializer<K> keySerializer)
 		{
+			if(isDisposed)
+				throw new ObjectDisposedException("IDatabase");
+			
 			RegisterIndex(label, field, keySerializer, 4096, 128);
 		}
 
@@ -107,6 +105,9 @@ namespace RenDBCore.Internal
 		public virtual void RegisterIndex<K>(string label, string field, ISerializer<K> keySerializer,
 			int blockSize, ushort minEntriesPerNode)
 		{
+			if(isDisposed)
+				throw new ObjectDisposedException("IDatabase");
+			
 			// Decide which collection to use
 			var indexes = NormalIndexes;
 
@@ -122,13 +123,19 @@ namespace RenDBCore.Internal
 		/// </summary>
 		public virtual bool Insert(T value)
 		{
+			if(isDisposed)
+				throw new ObjectDisposedException("IDatabase");
+			
 			try {
 				// If unique key already exists, throw error
 				if(UniqueIdExists(value.Id))
 					throw new Exception("An entry with _id ("+value.Id.ToString()+") already exists.");
-
+				
 				// Insert a new data to record storage.
 				uint newId = RecStorage.Create(ModelSerializer.Serialize(value));
+
+				// Add unique key
+				UniqueIndex.Insert(value.Id, newId);
 
 				// Iterate through all fields in the model instance.
 				IterateIndexes(value, delegate(IIndex indexTree, string field) {
@@ -148,6 +155,9 @@ namespace RenDBCore.Internal
 		/// </summary>
 		public virtual bool Update(T value)
 		{
+			if(isDisposed)
+				throw new ObjectDisposedException("IDatabase");
+			
 			try {
 				// If unique key doesn't exist, throw error
 				uint index = 0;
@@ -167,8 +177,16 @@ namespace RenDBCore.Internal
 
 				// Delete any indexes associated with the original model instance and reinsert them with new data.
 				IterateIndexes(value, delegate(IIndex indexTree, string field) {
-					if(indexTree.Delete(origModel.GetFieldData(field), index))
-						indexTree.Insert(value.GetFieldData(field), index);
+					
+					// If the value did change
+					var origFieldValue = origModel.GetFieldData(field);
+					var newFieldValue = value.GetFieldData(field);
+					if(origFieldValue != newFieldValue) {
+						
+						// Delete existing index and reinsert the new one.
+						if(indexTree.Delete(origFieldValue, index))
+							indexTree.Insert(newFieldValue, index);
+					}
 					return true;
 				});
 				return true;
@@ -184,6 +202,9 @@ namespace RenDBCore.Internal
 		/// </summary>
 		public virtual bool Delete(Guid id)
 		{
+			if(isDisposed)
+				throw new ObjectDisposedException("IDatabase");
+			
 			// If id exists
 			uint index = 0;
 			if(UniqueIdExists(id, out index)) {
@@ -214,6 +235,9 @@ namespace RenDBCore.Internal
 		/// </summary>
 		public virtual T Find(Guid id)
 		{
+			if(isDisposed)
+				throw new ObjectDisposedException("IDatabase");
+			
 			// If id exists
 			uint index = 0;
 			if(UniqueIdExists(id, out index)) {
@@ -233,6 +257,9 @@ namespace RenDBCore.Internal
 		/// </summary>
 		public virtual DatabaseQuery<T> Find(int estimatedCount = 0)
 		{
+			if(isDisposed)
+				throw new ObjectDisposedException("IDatabase");
+			
 			return new DatabaseQuery<T>(this, estimatedCount);
 		}
 
@@ -303,17 +330,36 @@ namespace RenDBCore.Internal
 		}
 
 		/// <summary>
+		/// Creates a new unique index tree for Guid.
+		/// </summary>
+		protected void CreateUniqueIndex()
+		{
+			uniqueIndexStream = GetNewIndexStream("_id");
+			UniqueIndex = new IndexTree<Guid, uint>(
+				GetNewNodeManager(
+					new GuidSerializer(),
+					new UintSerializer(),
+					new RecordStorage(new BlockStorage(uniqueIndexStream)),
+					256
+				)
+			);
+		}
+
+		/// <summary>
 		/// Creates a new index tree with specified params.
 		/// </summary>
 		protected IndexTree<K, uint> CreateIndex<K>(string label, string field,
 			ISerializer<K> keySerializer, int blockSize, ushort minEntriesPerNode)
 		{
+			var indexStream = GetNewIndexStream(label);
+			indexStreams.Add(field, indexStream);
+
 			// Create a new index tree
 			var newManager = GetNewNodeManager(
 				keySerializer,
 				new UintSerializer(),
 				new RecordStorage(new BlockStorage(
-					GetNewIndexStream(label),
+					indexStream,
 					blockSize
 				)),
 				minEntriesPerNode
@@ -338,6 +384,7 @@ namespace RenDBCore.Internal
 				isDisposed = true;
 
 				dbStream.Dispose();
+				uniqueIndexStream.Dispose();
 				foreach(var stream in indexStreams.Values)
 					stream.Dispose();
 			}

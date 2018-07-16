@@ -1,51 +1,57 @@
 ﻿using System;
-using RenDBCore.Internal;
+using System.Collections;
+using System.Collections.Generic;
 
 namespace RenDBCore
 {
-	public class BaseModel<K> : IModel<K> {
+	/// <summary>
+	/// A convenience base class for implementing IModel.
+	/// You may directly implement IModel instead but this class provides automatic
+	/// field management for you.
+	/// </summary>
+	public abstract class BaseModel<T> : IModel<T> {
 
-		protected Guid id;
+		/// <summary>
+		/// Dictionary of fields linked with value provider functions.
+		/// </summary>
+		protected Dictionary<string, Func<object>> fields;
 
 
 		/// <summary>
 		/// Returns the unique identifier of this model.
 		/// </summary>
-		public Guid Id {
-			get { return id; }
-		}
-
-		public ISerializer<K> Serializer {
-			get {
-				throw new NotImplementedException ();
-			}
-		}
+		public abstract Guid Id { get; set; }
 
 
-		public ISerializer<K> GetFieldSerializer<K> (string field)
+		public BaseModel ()
 		{
-			throw new NotImplementedException ();
+			fields = new Dictionary<string, Func<object>>();
 		}
 
-		public System.Collections.Generic.IEnumerator<string> GetUniqueFields ()
+		/// <summary>
+		/// Returns all fields in this model.
+		/// </summary>
+		public IEnumerator<string> GetAllFields ()
 		{
-			throw new NotImplementedException ();
+			return fields.Keys.GetEnumerator();
 		}
 
-		public System.Collections.Generic.IEnumerator<string> GetAllFields ()
-		{
-			throw new NotImplementedException ();
-		}
-
+		/// <summary>
+		/// Returns the field data associated with specified field name.
+		/// </summary>
 		public object GetFieldData (string field)
 		{
-			throw new NotImplementedException ();
+			if(fields.ContainsKey(field))
+				return fields[field].Invoke();
+			return null;
 		}
 
-
-		public BaseModel()
+		/// <summary>
+		/// Registers the specified params to the fields dictionary.
+		/// </summary>
+		protected void RegisterField(string field, Func<object> provider)
 		{
-
+			fields.Add(field, provider);
 		}
 	}
 }

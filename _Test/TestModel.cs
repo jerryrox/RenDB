@@ -1,46 +1,53 @@
 ﻿using System;
 using System.Collections.Generic;
 using Renko.Data;
+using RenDBCore;
 
-public class TestModel : IJsonable {
-	
-	public readonly Guid Id;
+public class TestModel : BaseModel<TestModel>, IJsonable {
 
-	public int Age;
+	public string Nickname;
+	public string Message;
+	public int Score;
+	public int Level;
 
-	public string Name;
+	[JsonAllowSerialize]
+	private Guid id;
 
-
-	public Tuple<int, string> SecondaryIndex {
-		get { return new Tuple<int, string>(Age, Name); }
+	/// <summary>
+	/// Returns the unique identifier of this model.
+	/// </summary>
+	public override Guid Id {
+		get { return id; }
+		set { id = value; }
 	}
 
 
-	public TestModel(int age, string name)
+	public TestModel() : base()
 	{
-		this.Id = Guid.NewGuid();
-		this.Age = age;
-		this.Name = name;
-	}
-
-	public TestModel (Guid id, int age, string name)
-	{
-		this.Id = id;
-		this.Age = age;
-		this.Name = name;
+		// Setup fields
+		RegisterField("nickname", () => Nickname);
+		RegisterField("message", () => Message);
+		RegisterField("score", () => Score);
+		RegisterField("level", () => Level);
 	}
 
 	public JsonObject ToJsonObject ()
 	{
 		JsonObject json = new JsonObject();
-		json["Id"] = Id.ToString();
-		json["Age"] = Age;
-		json["Name"] = Name;
+		json["Nickname"] = Nickname;
+		json["Message"] = Message;
+		json["Score"] = Score;
+		json["Level"] = Level;
+		json["_id"] = id.ToString();
 		return json;
 	}
 
 	public void FromJsonObject (JsonObject json)
 	{
-		throw new NotImplementedException ();
+		Nickname = json["Nickname"].AsString();
+		Message = json["Message"].AsString();
+		Score = json["Score"].AsInt();
+		Level = json["Level"].AsInt();
+		id = new Guid(json["_id"].AsString());
 	}
 }

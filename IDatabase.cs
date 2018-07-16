@@ -54,7 +54,7 @@ namespace RenDBCore
 		/// Finds using returned query object.
 		/// Assign estimatedCount to set internal lists' capacity value.
 		/// </summary>
-		DatabaseQuery<T> Find(int estimatedCount);
+		DatabaseQuery<T> Find(int estimatedCount = 0);
 
 		/// <summary>
 		/// Disposes this database instance.

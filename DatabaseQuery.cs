@@ -31,7 +31,7 @@ namespace RenDBCore
 		}
 
 		/// <summary>
-		/// Sets sorting flag for specified field and direction.
+		/// Sets sorting flag for specified direction.
 		/// </summary>
 		public DatabaseQuery<T> Sort(bool isAscending)
 		{
@@ -42,7 +42,7 @@ namespace RenDBCore
 		/// <summary>
 		/// Finds all entries.
 		/// </summary>
-		public DatabaseQuery<T> Find()
+		public DatabaseQuery<T> FindAll()
 		{
 			// Enumerate through all unique keys
 			foreach(var entry in database.UniqueIndex.GetAll(isAscending)) {
@@ -66,9 +66,18 @@ namespace RenDBCore
 				// Get the index as specific type.
 				var tree = database.NormalIndexes[field] as IndexTree<K, uint>;
 				if(tree != null) {
-					
+
+					// Get comparer
+					var comparer = Comparer<K>.Default;
+
 					// Enumerate through matched entries
 					foreach(var entry in tree.GetExactMatch(key, isAscending)) {
+						
+						// If not matching key, finish immediately
+						int compare = comparer.Compare(entry.Item1, key);
+						if(compare != 0)
+							break;
+
 						// Add indexes to temp list.
 						tempIndexes.Add(entry.Item2);
 					}

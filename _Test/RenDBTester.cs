@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 using Renko.Data;
-using System;
+using System.IO;
 using RenDBCore;
 using Renko.Matching;
 
@@ -11,96 +11,126 @@ public class RenDBTester : MonoBehaviour {
 	public int InputI;
 	public string InputS;
 
-	private TestDatabase testDb;
+	private IDatabase<TestModel> database;
 
-
-	void Awake()
-	{
-		JsonAdaptor.Register(
-			typeof(Tuple<Guid, uint>),
-			delegate(object value) {
-				var tuple = value as Tuple<Guid, uint>;
-				JsonObject json = new JsonObject();
-				json["Item1"] = tuple.Item1.ToString();
-				json["Item2"] = tuple.Item2;
-				return json;
-			},
-			null
-		);
-		JsonAdaptor.Register(
-			typeof(Tuple<int, string>),
-			delegate(object value) {
-				var tuple = value as Tuple<int, string>;
-				JsonObject json = new JsonObject();
-				json["Item1"] = tuple.Item1;
-				json["Item2"] = tuple.Item2;
-				return json;
-			},
-			null
-		);
-	}
 
 	void Update()
 	{
 		if(Input.GetKeyDown(KeyCode.Alpha1)) {
-			testDb = new TestDatabase();
+			// Initialize database
+			database = RenDB.InitDiskDatabase(
+				"TestDB",
+				new TestSerializer(),
+				Path.Combine(Application.dataPath, "TestDB"),
+				128
+			);
+
+			// Instantiate serializers
+			var strSer = new StringSerializer();
+			var intSer = new IntSerializer();
+			// Initialize indexes
+			database.RegisterIndex("n", "nickname", strSer, 4096, 256);
+			database.RegisterIndex("m", "message", strSer, 4096, 32);
+			database.RegisterIndex("s", "score", intSer, 512, 128);
+			database.RegisterIndex("l", "level", intSer, 512, 128);
 			Debug.Log("Initialized new test db.");
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha2)) {
-			TestModel model = new TestModel(InputI, "Test #" + InputI);
+			TestModel model = new TestModel() {
+				Id = Guid.NewGuid(),
+				Level = Random.Range(0, 100),
+				Score = Random.Range(10000, 50000),
+				Message = "This is my test message " + Random.Range(100000, 1000000),
+				Nickname = "Player " + Random.Range(100, 1000)
+			};
 
-			testDb.Insert(model);
+			bool success = database.Insert(model);
 			Debug.Log("Inserted new model: " + new JsonData(model).ToString());
+			Debug.LogWarning("Success: " + success);
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha3)) {
-			Guid guid = new Guid(InputS);
-			TestModel updateModel = new TestModel(guid, InputI, "Updated model to #" + InputI);
+			TestModel updateModel = new TestModel() {
+				Id = new Guid(InputS),
+				Level = InputI,
+				Score = InputI * 1000,
+				Message = "Updated message " + InputI,
+				Nickname = "Player " + InputI
+			};
 
-			testDb.Update(updateModel);
+			bool success = database.Update(updateModel);
 			Debug.Log("Updated model to: " + new JsonData(updateModel).ToString());
+			Debug.LogWarning("Success: " + success);
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha4)) {
-			testDb.Delete(new Guid(InputS));
+			bool success = database.Delete(new Guid(InputS));
 			Debug.Log("Deleted model with guid: " + InputS);
+			Debug.LogWarning("Success: " + success);
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha5)) {
-			Debug.Log("Found model: " + new JsonData(testDb.Find(new Guid(InputS))).ToString());
+			Debug.Log("Found model: " + new JsonData(database.Find(new Guid(InputS))).ToString());
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha6)) {
-			var results = testDb.Find(InputI, InputS);
+			var query = database.Find()
+				.Sort(Input.GetKey(KeyCode.LeftShift))
+				.FindExact("nickname", "Player " + InputI)
+				.GetAll();
+
 			Debug.LogWarning("Getting results");
-			foreach(var model in results) {
-				Debug.Log("Found: " + new JsonData(model).ToString());
+			while(query.MoveNext()) {
+				Debug.Log("Found: " + new JsonData(query.Current).ToString());
 			}
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha7)) {
-			var results = testDb.FindAll(Input.GetKey(KeyCode.LeftShift));
-			Debug.LogWarning("Getting results");
-			foreach(var model in results)
-				Debug.Log("Found: " + new JsonData(model).ToString());
+			var query = database.Find()
+				.Sort(Input.GetKey(KeyCode.LeftShift))
+				.FindAll()
+				.Skip(InputI);
+
+			if(Input.GetKey(KeyCode.Z)) {
+				Debug.LogWarning("Getting results");
+				var a = query.GetAll();
+				while(a.MoveNext()) {
+					Debug.Log("Found: " + new JsonData(a.Current).ToString());
+				}
+			}
+			else if(Input.GetKey(KeyCode.X)) {
+				Debug.LogWarning("Getting results");
+				var a = query.GetRange(10);
+				while(a.MoveNext()) {
+					Debug.Log("Found: " + new JsonData(a.Current).ToString());
+				}
+			}
+			else {
+				Debug.LogWarning("Getting results");
+				var a = query.GetFirst();
+				Debug.Log("Found: " + new JsonData(a).ToString());
+			}
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha8)) {
-			MatchGroup<int> ageMatcher = new MatchGroup<int>(); {
-				ageMatcher.AddMatcher(new IntMatcher(0, IntMatcher.Types.GreaterOrEqual));
-				ageMatcher.AddMatcher(new IntMatcher(5, IntMatcher.Types.LessOrEqual));
-			}
-			StringMatcher nameMatcher = new StringMatcher("updated", StringMatcher.Types.StartWith, true);
+			var levelMatcher = new MatchGroup<int>();
+			levelMatcher.AddMatcher(new IntMatcher(0, IntMatcher.Types.GreaterOrEqual));
+			levelMatcher.AddMatcher(new IntMatcher(50, IntMatcher.Types.LessOrEqual));
 
-			var results = testDb.Find(ageMatcher, nameMatcher);
+			var query = database.Find()
+				.Sort(Input.GetKey(KeyCode.LeftShift))
+				.FindMatch("level", levelMatcher)
+				.GetAll();
+
 			Debug.LogWarning("Getting results");
-			foreach(var model in results)
-				Debug.Log("Found: " + new JsonData(model).ToString());
+			while(query.MoveNext()) {
+				Debug.Log("Found: " + new JsonData(query.Current).ToString());
+			}
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha9)) {
-			testDb.Dispose();
+			database.Dispose();
 			Debug.Log("Disposed");
 		}
 	}

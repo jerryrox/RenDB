@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 
-namespace RenDBCore.Internal
+namespace RenDBCore
 {
 	/// <summary>
 	/// Interface of a model used in RenDB databases.
@@ -14,13 +14,15 @@ namespace RenDBCore.Internal
 		/// </summary>
 		Guid Id { get; }
 
-		ISerializer<K> GetFieldSerializer<K>(string field);
 
 		/// <summary>
-		/// Returns all unique and non-unique fields in this model.
+		/// Returns all fields in this model.
 		/// </summary>
 		IEnumerator<string> GetAllFields();
 
+		/// <summary>
+		/// Returns the field data associated with specified field name.
+		/// </summary>
 		object GetFieldData(string field);
 	}
 }

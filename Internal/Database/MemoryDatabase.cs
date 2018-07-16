@@ -18,6 +18,8 @@ namespace RenDBCore.Internal
 			RecStorage = new RecordStorage(new BlockStorage(
 				dbStream, blockSize
 			));
+
+			CreateUniqueIndex();
 		}
 
 		~MemoryDatabase()
@@ -28,7 +30,7 @@ namespace RenDBCore.Internal
 		/// <summary>
 		/// Disposes this database instance.
 		/// </summary>
-		public void Dispose()
+		public override void Dispose()
 		{
 			base.Dispose(true);
 		}
