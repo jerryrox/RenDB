@@ -4,7 +4,24 @@ using System.Text;
 
 namespace RenDBCore
 {
+	/// <summary>
+	/// Variant of ISerializer for serializing string.
+	/// </summary>
 	public class StringSerializer : ISerializer<string> {
+
+		private static StringSerializer DefaultSerializer;
+
+
+		/// <summary>
+		/// Returns a reusable static instance of this serializer.
+		/// </summary>
+		public static StringSerializer Default {
+			get {
+				if(DefaultSerializer == null)
+					DefaultSerializer = new StringSerializer();
+				return DefaultSerializer;
+			}
+		}
 
 		/// <summary>
 		/// Returns whether specified type T has a fixed size.

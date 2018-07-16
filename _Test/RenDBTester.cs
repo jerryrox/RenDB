@@ -25,14 +25,11 @@ public class RenDBTester : MonoBehaviour {
 				128
 			);
 
-			// Instantiate serializers
-			var strSer = new StringSerializer();
-			var intSer = new IntSerializer();
 			// Initialize indexes
-			database.RegisterIndex("n", "nickname", strSer, 4096, 256);
-			database.RegisterIndex("m", "message", strSer, 4096, 32);
-			database.RegisterIndex("s", "score", intSer, 512, 128);
-			database.RegisterIndex("l", "level", intSer, 512, 128);
+			database.RegisterIndex("n", "nickname", StringSerializer.Default, 4096, 256);
+			database.RegisterIndex("m", "message", StringSerializer.Default, 4096, 32);
+			database.RegisterIndex("s", "score", IntSerializer.Default, 512, 128);
+			database.RegisterIndex("l", "level", IntSerializer.Default, 512, 128);
 			Debug.Log("Initialized new test db.");
 		}
 
