@@ -88,9 +88,14 @@ public class RenDBTester : MonoBehaviour {
 
 		if(Input.GetKeyDown(KeyCode.Alpha7)) {
 			var query = database.Find()
-				.Sort(Input.GetKey(KeyCode.LeftShift))
-				.FindAll()
-				.Skip(InputI);
+				.Sort(Input.GetKey(KeyCode.LeftShift));
+
+			if(string.IsNullOrEmpty(InputS))
+				query.FindAll();
+			else
+				query.FindAll<string>(InputS);
+			
+			query.Skip(InputI);
 
 			if(Input.GetKey(KeyCode.Z)) {
 				Debug.LogWarning("Getting results");
