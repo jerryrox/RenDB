@@ -21,6 +21,17 @@ namespace RenDBCore
 		private bool isInitiallyIncluded;
 
 
+		/// <summary>
+		/// Returns whether all further find requests should be ignored.
+		/// This can happen if user queried more than once and there are no indexes found
+		/// in the list.
+		/// In this case, we should skip further find requests for performance.
+		/// </summary>
+		private bool ShouldIgnore {
+			get { return isInitiallyIncluded && indexes.Count == 0; }
+		}
+
+
 		public DatabaseQuery(BaseDatabase<T> database, int estimatedCount = 0)
 		{
 			this.database = database;
@@ -40,10 +51,14 @@ namespace RenDBCore
 		}
 
 		/// <summary>
-		/// Finds all entries.
+		/// Finds all entries by unique index.
 		/// </summary>
 		public DatabaseQuery<T> FindAll()
 		{
+			// Ignore find if required.
+			if(ShouldIgnore)
+				return this;
+			
 			// Enumerate through all unique keys
 			foreach(var entry in database.UniqueIndex.GetAll(isAscending)) {
 				// Add indexes to temp list.
@@ -56,10 +71,43 @@ namespace RenDBCore
 		}
 
 		/// <summary>
+		/// Finds all entries by specified field.
+		/// </summary>
+		public DatabaseQuery<T> FindAll<K>(string field)
+		{
+			// Ignore find if required.
+			if(ShouldIgnore)
+				return this;
+			
+			// Find the index tree
+			IndexTree<K, uint> index = null;
+			if(database.NormalIndexes.ContainsKey(field)) {
+				// Get index.
+				index = database.NormalIndexes[field] as IndexTree<K, uint>;
+				if(index != null) {
+					// Enumerate through all keys
+					foreach(var entry in index.GetAll(isAscending)) {
+						// Add indexes to temp list.
+						tempIndexes.Add(entry.Item2);
+					}
+
+					// Intersect indexes
+					IntersectIndexes();
+				}
+			}
+
+			return this;
+		}
+
+		/// <summary>
 		/// Finds entries with exact field data.
 		/// </summary>
 		public DatabaseQuery<T> FindExact<K>(string field, K key)
 		{
+			// Ignore find if required.
+			if(ShouldIgnore)
+				return this;
+			
 			// Check if an index tree exists for field.
 			if(database.NormalIndexes.ContainsKey(field)) {
 				
@@ -94,6 +142,10 @@ namespace RenDBCore
 		/// </summary>
 		public DatabaseQuery<T> FindMatch<K>(string field, IMatcher<K> matcher)
 		{
+			// Ignore find if required.
+			if(ShouldIgnore)
+				return this;
+			
 			// Check if an index tree exists for field.
 			if(database.NormalIndexes.ContainsKey(field)) {
 
