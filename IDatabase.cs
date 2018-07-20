@@ -14,22 +14,16 @@ namespace RenDBCore
 		string Name { get; }
 
 		/// <summary>
+		/// Returns the object that manages database index.
+		/// </summary>
+		IIndexUtility Indexes { get; }
+
+		/// <summary>
 		/// Returns whether the database instance is disposed.
 		/// </summary>
 		bool IsDisposed { get; }
 
 
-		/// <summary>
-		/// Registers a new index tree to database with specified params.
-		/// </summary>
-		void RegisterIndex<K>(string label, string field, ISerializer<K> keySerializer);
-
-		/// <summary>
-		/// Registers a new index tree to database with specified params.
-		/// </summary>
-		void RegisterIndex<K>(string label, string field, ISerializer<K> keySerializer, int blockSize,
-			ushort minEntriesPerNode);
-		
 		/// <summary>
 		/// Inserts the specified model instance.
 		/// </summary>
@@ -54,7 +48,7 @@ namespace RenDBCore
 		/// Finds using returned query object.
 		/// Assign estimatedCount to set internal lists' capacity value.
 		/// </summary>
-		DatabaseQuery<T> Find(int estimatedCount = 0);
+		IDatabaseQuery<T> Query(int estimatedCount = 0);
 
 		/// <summary>
 		/// Disposes this database instance.

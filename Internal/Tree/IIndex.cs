@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using Renko.Matching;
 
 namespace RenDBCore.Internal
 {
@@ -36,11 +35,6 @@ namespace RenDBCore.Internal
 		/// Finds all entries.
 		/// </summary>
 		IEnumerable GetAllNonGeneric(bool ascending); // Explicitly named due to compile errors.
-
-		/// <summary>
-		/// Finds all entries with keys matching specified matcher.
-		/// </summary>
-		IEnumerable GetOptionMatch(IMatcher matcher, bool ascending);
 
 		/// <summary>
 		/// Finds all entries with the keys matching or (larger if ascending, lesser if descending) to specified key.
@@ -79,11 +73,6 @@ namespace RenDBCore.Internal
 		/// Finds all entries.
 		/// </summary>
 		IEnumerable<Tuple<K, V>> GetAll(bool ascending);
-
-		/// <summary>
-		/// Finds all entries with keys matching specified matcher.
-		/// </summary>
-		IEnumerable<Tuple<K, V>> GetOptionMatch(IMatcher<K> matcher, bool ascending);
 
 		/// <summary>
 		/// Finds all entries with the keys matching or (larger if ascending, lesser if descending) to specified key.

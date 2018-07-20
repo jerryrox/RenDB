@@ -2,7 +2,6 @@
 using Renko.Data;
 using System.IO;
 using RenDBCore;
-using Renko.Matching;
 
 using Guid = System.Guid;
 
@@ -10,6 +9,8 @@ public class RenDBTester : MonoBehaviour {
 
 	public int InputI;
 	public string InputS;
+	public string InputS2;
+	public string InputS3;
 
 	private IDatabase<TestModel> database;
 
@@ -26,10 +27,11 @@ public class RenDBTester : MonoBehaviour {
 			);
 
 			// Initialize indexes
-			database.RegisterIndex("n", "nickname", StringSerializer.Default, 4096, 256);
-			database.RegisterIndex("m", "message", StringSerializer.Default, 4096, 32);
-			database.RegisterIndex("s", "score", IntSerializer.Default, 512, 128);
-			database.RegisterIndex("l", "level", IntSerializer.Default, 512, 128);
+			var indexes = database.Indexes;
+			indexes.Register("n", "nickname", StringSerializer.Default, 4096, 256);
+			indexes.Register("m", "message", StringSerializer.Default, 4096, 32);
+			indexes.Register("s", "score", IntSerializer.Default, 512, 128);
+			indexes.Register("l", "level", IntSerializer.Default, 512, 128);
 			Debug.Log("Initialized new test db.");
 		}
 
@@ -72,9 +74,9 @@ public class RenDBTester : MonoBehaviour {
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha6)) {
-			var query = database.Find()
+			var query = database.Query()
 				.Sort(Input.GetKey(KeyCode.LeftShift))
-				.FindExact("nickname", "Player " + InputI)
+				.Find("nickname", "Player " + InputI)
 				.GetAll();
 
 			Debug.LogWarning("Getting results");
@@ -84,13 +86,13 @@ public class RenDBTester : MonoBehaviour {
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha7)) {
-			var query = database.Find()
+			var query = database.Query()
 				.Sort(Input.GetKey(KeyCode.LeftShift));
 
 			if(string.IsNullOrEmpty(InputS))
-				query.FindAll();
+				query.Find();
 			else
-				query.FindAll<string>(InputS);
+				query.Find<string>(InputS);
 			
 			query.Skip(InputI);
 
@@ -116,13 +118,11 @@ public class RenDBTester : MonoBehaviour {
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha8)) {
-			var levelMatcher = new MatchGroup<int>();
-			levelMatcher.AddMatcher(new IntMatcher(0, IntMatcher.Types.GreaterOrEqual));
-			levelMatcher.AddMatcher(new IntMatcher(50, IntMatcher.Types.LessOrEqual));
-
-			var query = database.Find()
+			var query = database.Query()
 				.Sort(Input.GetKey(KeyCode.LeftShift))
-				.FindMatch("level", levelMatcher)
+				.Find("level", delegate(int level) {
+					return level >= 0 && level < 50;
+				})
 				.GetAll();
 
 			Debug.LogWarning("Getting results");
@@ -132,6 +132,42 @@ public class RenDBTester : MonoBehaviour {
 		}
 
 		if(Input.GetKeyDown(KeyCode.Alpha9)) {
+			var query = database.Query()
+				.Sort(true)
+				.Find(delegate(TestModel model) {
+					return model.Level < 10;
+				})
+				.GetAll();
+
+
+			Debug.LogWarning("Getting results");
+			while(query.MoveNext()) {
+				Debug.Log("Found: " + new JsonData(query.Current).ToString());
+			}
+		}
+
+		if(Input.GetKeyDown(KeyCode.Alpha0)) {
+			if(Input.GetKey(KeyCode.Z)) {
+				if(Input.GetKey(KeyCode.LeftShift)) {
+					database.Indexes.HardRebuild<string>(InputS, InputS2, StringSerializer.Default);
+					Debug.Log("Rebuilt index with label: " + InputS + " and field: " + InputS2 + " (Hard)");
+				}
+				else {
+					database.Indexes.SoftRebuild<string>(InputS);
+					Debug.Log("Rebuilt index with field: " + InputS + " (Soft)");
+				}
+			}
+			else if(Input.GetKey(KeyCode.X)) {
+				database.Indexes.Delete(InputS, InputS2);
+				Debug.Log("Deleted index with label: " + InputS + " and field: " + InputS2);
+			}
+			else if(Input.GetKey(KeyCode.C)) {
+				database.Indexes.RenameLabel(InputS, InputS2, InputS3, StringSerializer.Default);
+				Debug.Log("Renamed index label with field: " + InputS + " and label from: " + InputS2 + " to: " + InputS3);
+			}
+		}
+
+		if(Input.GetKeyDown(KeyCode.M)) {
 			database.Dispose();
 			Debug.Log("Disposed");
 		}

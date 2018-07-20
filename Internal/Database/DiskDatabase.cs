@@ -32,7 +32,7 @@ namespace RenDBCore.Internal
 				dbStream, blockSize
 			));
 
-			CreateUniqueIndex();
+			IndexUtils.CreateUniqueIndex();
 		}
 
 		~DiskDatabase()
@@ -49,9 +49,37 @@ namespace RenDBCore.Internal
 		}
 
 		/// <summary>
+		/// Deletes the stream source with specified values.
+		/// </summary>
+		public override void DeleteIndex(string label)
+		{
+			string filePath = GetIndexPath(label);
+			if(File.Exists(filePath))
+				File.Delete(filePath);
+		}
+
+		/// <summary>
+		/// Returns whether a stream file with specified label exists.
+		/// </summary>
+		public override bool StreamExists(string label)
+		{
+			return File.Exists(GetIndexPath(label));
+		}
+
+		/// <summary>
+		/// Renames stream source file.
+		/// </summary>
+		public override void RenameStreamFile(string oldLabel, string newLabel)
+		{
+			string oldPath = GetIndexPath(oldLabel);
+			string newPath = GetIndexPath(newLabel);
+			File.Move(oldPath, newPath);
+		}
+
+		/// <summary>
 		/// Returns a new IO stream with specified params.
 		/// </summary>
-		protected override Stream GetNewIndexStream (string label)
+		public override Stream GetNewIndexStream (string label)
 		{
 			return new FileStream(
 				GetIndexPath(label),
@@ -63,7 +91,7 @@ namespace RenDBCore.Internal
 		/// <summary>
 		/// Returns a new node manager instance with specified parameters.
 		/// </summary>
-		protected override ITreeNodeManager<K, uint> GetNewNodeManager<K> (ISerializer<K> keySerializer,
+		public override ITreeNodeManager<K, uint> GetNewNodeManager<K> (ISerializer<K> keySerializer,
 			UintSerializer valueSerializer, IRecordStorage recordStorage, ushort minEntriesPerNode)
 		{
 			return new DiskTreeNodeManager<K, uint>(

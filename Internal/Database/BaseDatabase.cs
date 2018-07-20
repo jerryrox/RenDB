@@ -2,7 +2,6 @@
 using System.IO;
 using System.Collections;
 using System.Collections.Generic;
-using Renko.Matching;
 
 namespace RenDBCore.Internal
 {
@@ -12,16 +11,6 @@ namespace RenDBCore.Internal
 	/// </summary>
 	public abstract class BaseDatabase<T> : IDatabase<T> where T : class, IModel<T> {
 		
-		/// <summary>
-		/// Dictionary of all indexed unique fields.
-		/// </summary>
-		public IndexTree<Guid, uint> UniqueIndex;
-
-		/// <summary>
-		/// Dictionary of all indexed non-unique fields.
-		/// </summary>
-		public Dictionary<string, IIndex> NormalIndexes;
-
 		/// <summary>
 		/// The serializer of the model.
 		/// </summary>
@@ -33,6 +22,11 @@ namespace RenDBCore.Internal
 		public RecordStorage RecStorage;
 
 		/// <summary>
+		/// The database index manager.
+		/// </summary>
+		public IndexUtility<T> IndexUtils;
+
+		/// <summary>
 		/// Backing field of Name property.
 		/// </summary>
 		protected readonly string name;
@@ -41,16 +35,6 @@ namespace RenDBCore.Internal
 		/// The main IO stream to database.
 		/// </summary>
 		protected Stream dbStream;
-
-		/// <summary>
-		/// The unique index tree IO stream.
-		/// </summary>
-		protected Stream uniqueIndexStream;
-
-		/// <summary>
-		/// Dictionary of IO streams associated with index (field) names.
-		/// </summary>
-		protected Dictionary<string, Stream> indexStreams;
 
 		/// <summary>
 		/// Whether this database instance is disposed.
@@ -66,6 +50,13 @@ namespace RenDBCore.Internal
 		}
 
 		/// <summary>
+		/// Returns the object that manages database index.
+		/// </summary>
+		public IIndexUtility Indexes {
+			get { return IndexUtils; }
+		}
+
+		/// <summary>
 		/// Returns whether this database instance is disposed.
 		/// </summary>
 		public virtual bool IsDisposed {
@@ -78,44 +69,13 @@ namespace RenDBCore.Internal
 			this.name = name;
 			this.ModelSerializer = modelSerializer;
 
-			this.indexStreams = new Dictionary<string, Stream>();
-			this.NormalIndexes = new Dictionary<string, IIndex>();
+			this.IndexUtils = new IndexUtility<T>(this);
 			this.isDisposed = false;
 		}
 
 		~BaseDatabase()
 		{
 			Dispose(false);
-		}
-
-		/// <summary>
-		/// Registers a new index tree to database with specified params.
-		/// </summary>
-		public virtual void RegisterIndex<K>(string label, string field, ISerializer<K> keySerializer)
-		{
-			if(isDisposed)
-				throw new ObjectDisposedException("IDatabase");
-			
-			RegisterIndex(label, field, keySerializer, 4096, 128);
-		}
-
-		/// <summary>
-		/// Registers a new index tree to database with specified params.
-		/// </summary>
-		public virtual void RegisterIndex<K>(string label, string field, ISerializer<K> keySerializer,
-			int blockSize, ushort minEntriesPerNode)
-		{
-			if(isDisposed)
-				throw new ObjectDisposedException("IDatabase");
-			
-			// Decide which collection to use
-			var indexes = NormalIndexes;
-
-			// Create the index tree if not exists.
-			if(!indexes.ContainsKey(field)) {
-				var index = CreateIndex(label, field, keySerializer, blockSize, minEntriesPerNode);
-				indexes.Add(field, index);
-			}
 		}
 
 		/// <summary>
@@ -128,17 +88,17 @@ namespace RenDBCore.Internal
 			
 			try {
 				// If unique key already exists, throw error
-				if(UniqueIdExists(value.Id))
+				if(IndexUtils.UniqueIdExists(value.Id))
 					throw new Exception("An entry with _id ("+value.Id.ToString()+") already exists.");
 				
 				// Insert a new data to record storage.
 				uint newId = RecStorage.Create(ModelSerializer.Serialize(value));
 
 				// Add unique key
-				UniqueIndex.Insert(value.Id, newId);
+				IndexUtils.InsertUnique(value.Id, newId);
 
 				// Iterate through all fields in the model instance.
-				IterateIndexes(value, delegate(IIndex indexTree, string field) {
+				IndexUtils.IterateIndexes(value, delegate(IIndex indexTree, string field) {
 					indexTree.Insert(value.GetFieldData(field), newId);
 					return true;
 				});
@@ -161,7 +121,7 @@ namespace RenDBCore.Internal
 			try {
 				// If unique key doesn't exist, throw error
 				uint index = 0;
-				if(!UniqueIdExists(value.Id, out index))
+				if(!IndexUtils.UniqueIdExists(value.Id, out index))
 					throw new Exception("No entry with _id ("+value.Id+") was found.");
 
 				// Get the original data.
@@ -176,7 +136,7 @@ namespace RenDBCore.Internal
 				RecStorage.Update(index, ModelSerializer.Serialize(value));
 
 				// Delete any indexes associated with the original model instance and reinsert them with new data.
-				IterateIndexes(value, delegate(IIndex indexTree, string field) {
+				IndexUtils.IterateIndexes(value, delegate(IIndex indexTree, string field) {
 					
 					// If the value did change
 					var origFieldValue = origModel.GetFieldData(field);
@@ -207,7 +167,7 @@ namespace RenDBCore.Internal
 			
 			// If id exists
 			uint index = 0;
-			if(UniqueIdExists(id, out index)) {
+			if(IndexUtils.UniqueIdExists(id, out index)) {
 				var data = RecStorage.Find(index);
 				if(data == null)
 					return false;
@@ -219,7 +179,7 @@ namespace RenDBCore.Internal
 				RecStorage.Delete(index);
 
 				// Delete from index trees
-				IterateIndexes(model, delegate(IIndex indexTree, string field) {
+				IndexUtils.IterateIndexes(model, delegate(IIndex indexTree, string field) {
 					indexTree.Delete(model.GetFieldData(field), index);
 					return true;
 				});
@@ -240,7 +200,7 @@ namespace RenDBCore.Internal
 			
 			// If id exists
 			uint index = 0;
-			if(UniqueIdExists(id, out index)) {
+			if(IndexUtils.UniqueIdExists(id, out index)) {
 				var data = RecStorage.Find(index);
 				if(data == null)
 					return null;
@@ -255,22 +215,12 @@ namespace RenDBCore.Internal
 		/// Finds using returned query object.
 		/// Assign estimatedCount to set internal lists' capacity value.
 		/// </summary>
-		public virtual DatabaseQuery<T> Find(int estimatedCount = 0)
+		public virtual IDatabaseQuery<T> Query(int estimatedCount = 0)
 		{
 			if(isDisposed)
 				throw new ObjectDisposedException("IDatabase");
 			
 			return new DatabaseQuery<T>(this, estimatedCount);
-		}
-
-		/// <summary>
-		/// Finds and returns the index tree instance associated with specified field.
-		/// </summary>
-		public IIndex<K, uint> GetIndexTree<K>(string field)
-		{
-			if(NormalIndexes.ContainsKey(field))
-				return NormalIndexes[field] as IIndex<K, uint>;
-			return null;
 		}
 
 		/// <summary>
@@ -283,110 +233,38 @@ namespace RenDBCore.Internal
 		}
 
 		/// <summary>
-		/// Iterates through all registered index trees.
-		/// Returns whether all indexHandler invocation returned true.
+		/// Deletes the stream source with specified label.
 		/// </summary>
-		protected bool IterateIndexes(T value, Func<IIndex, string, bool> indexHandler)
-		{
-			var fields = value.GetAllFields();
-			while(fields.MoveNext()) {
-				string field = fields.Current;
-
-				// If this field is being indexed
-				if(NormalIndexes.ContainsKey(field)) {
-					if(!indexHandler(
-						NormalIndexes[field],
-						field)) {
-
-						return false;
-					}
-				}
-			}
-			return true;
-		}
+		public abstract void DeleteIndex(string label);
 
 		/// <summary>
-		/// Convenience function for calling UniqueIdExists without out param.
+		/// Returns whether a stream file with specified label exists.
 		/// </summary>
-		protected bool UniqueIdExists(Guid id)
-		{
-			uint index;
-			return UniqueIdExists(id, out index);
-		}
+		public abstract bool StreamExists(string label);
 
 		/// <summary>
-		/// Returns whether specified Guid exists in unique index tree.
-		/// Outputs the index associated with the id, if exists.
+		/// Renames stream source file.
 		/// </summary>
-		protected bool UniqueIdExists(Guid id, out uint index)
-		{
-			var entry = UniqueIndex.Get(id);
-			if(entry != null) {
-				index = entry.Item2;
-				return true;
-			}
-			index = 0;
-			return false;
-		}
-
-		/// <summary>
-		/// Creates a new unique index tree for Guid.
-		/// </summary>
-		protected void CreateUniqueIndex()
-		{
-			uniqueIndexStream = GetNewIndexStream("_id");
-			UniqueIndex = new IndexTree<Guid, uint>(
-				GetNewNodeManager(
-					new GuidSerializer(),
-					new UintSerializer(),
-					new RecordStorage(new BlockStorage(uniqueIndexStream)),
-					256
-				)
-			);
-		}
-
-		/// <summary>
-		/// Creates a new index tree with specified params.
-		/// </summary>
-		protected IndexTree<K, uint> CreateIndex<K>(string label, string field,
-			ISerializer<K> keySerializer, int blockSize, ushort minEntriesPerNode)
-		{
-			var indexStream = GetNewIndexStream(label);
-			indexStreams.Add(field, indexStream);
-
-			// Create a new index tree
-			var newManager = GetNewNodeManager(
-				keySerializer,
-				new UintSerializer(),
-				new RecordStorage(new BlockStorage(
-					indexStream,
-					blockSize
-				)),
-				minEntriesPerNode
-			);
-			return new IndexTree<K, uint>(newManager, true);
-		}
+		public abstract void RenameStreamFile(string oldLabel, string newLabel);
 
 		/// <summary>
 		/// Returns a new IO stream with specified params.
 		/// </summary>
-		protected abstract Stream GetNewIndexStream(string label);
+		public abstract Stream GetNewIndexStream(string label);
 
 		/// <summary>
 		/// Returns a new node manager instance with specified parameters.
 		/// </summary>
-		protected abstract ITreeNodeManager<K, uint> GetNewNodeManager<K>(ISerializer<K> keySerializer,
+		public abstract ITreeNodeManager<K, uint> GetNewNodeManager<K>(ISerializer<K> keySerializer,
 			UintSerializer valueSerializer, IRecordStorage recordStorage, ushort minEntriesPerNode);
-
+		
 		protected virtual void Dispose(bool disposing)
 		{
 			if(disposing && !isDisposed) {
 				isDisposed = true;
 
 				dbStream.Dispose();
-				uniqueIndexStream.Dispose();
-				foreach(var stream in indexStreams.Values)
-					stream.Dispose();
+				IndexUtils.Dispose();
 			}
 		}
 	}

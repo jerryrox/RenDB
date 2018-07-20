@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using Renko.Matching;
 
 namespace RenDBCore.Internal
 {
@@ -191,38 +190,6 @@ namespace RenDBCore.Internal
 				nodeManager,
 				startNode,
 				startIndex,
-				ascending ? TreeScanDirections.Ascending : TreeScanDirections.Descending
-			);
-		}
-
-		/// <summary>
-		/// Finds all entries with keys matching specified matchers.
-		/// </summary>
-		public IEnumerable GetOptionMatch(IMatcher matcher, bool ascending)
-		{
-			return GetOptionMatch(matcher as IMatcher<K>, ascending);
-		}
-
-		/// <summary>
-		/// Finds all entries with keys matching the specified matcher.
-		/// </summary>
-		public IEnumerable<Tuple<K, V>> GetOptionMatch(IMatcher<K> matcher, bool ascending)
-		{
-			if(matcher == null)
-				return GetAll(ascending);
-			
-			TreeNode<K, V> startNode = null;
-			int startIndex = 0;
-			if(ascending)
-				startNode = FindFirstNode(ref startIndex);
-			else
-				startNode = FindLastNode(ref startIndex);
-
-			return new TreeMatchScanner<K, V>(
-				nodeManager,
-				startNode,
-				startIndex,
-				matcher,
 				ascending ? TreeScanDirections.Ascending : TreeScanDirections.Descending
 			);
 		}
