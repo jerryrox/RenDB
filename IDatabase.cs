@@ -49,11 +49,6 @@ namespace RenDBCore
 		/// Assign estimatedCount to set internal lists' capacity value.
 		/// </summary>
 		IDatabaseQuery<T> Query(int estimatedCount = 0);
-
-		/// <summary>
-		/// Disposes this database instance.
-		/// </summary>
-		void Dispose();
 	}
 }
 

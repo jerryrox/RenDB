@@ -233,7 +233,6 @@ namespace RenDBCore.Internal
 			// Precalculate sizes
 			int keyLength = keySerializer.Length;
 			int valueLength = valueSerializer.Length;
-			int entrySize = keyLength + valueLength;
 
 			int bufferOffset = 0;
 

@@ -7,7 +7,6 @@ namespace RenDBCore.Internal
 	public class TreeEnumerator<K, V> : IEnumerator<Tuple<K, V>> {
 
 		readonly ITreeNodeManager<K, V> nodeManager;
-		readonly TreeScanDirections direction;
 		readonly Func<bool> scanNext;
 
 		private TreeNode<K, V> curNode;
@@ -51,7 +50,6 @@ namespace RenDBCore.Internal
 			this.nodeManager = nodeManager;
 			this.curNode = node;
 			this.curIndex = startIndex;
-			this.direction = direction;
 
 			this.scanNext = (
 				direction == TreeScanDirections.Ascending ?

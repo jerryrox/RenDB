@@ -104,7 +104,7 @@ namespace RenDBCore.Internal
 				});
 				return true;
 			}
-			catch(Exception e) {
+			catch(Exception) {
 				// Need to do something with thrown exceptions...
 				return false;
 			}
@@ -151,7 +151,7 @@ namespace RenDBCore.Internal
 				});
 				return true;
 			}
-			catch(Exception e) {
+			catch(Exception) {
 				// Need to do something with thrown exceptions...
 				return false;
 			}
